@@ -38,3 +38,4 @@ commandType cmd
 	    | head cmd == '@' = ACommand
 	    | otherwise       = CCommand 
 
+-- Starting the parsing commands

@@ -1,0 +1,5 @@
+In order to practice Haskell, I'm writing an assembler for the Hack Assembly language as specified in "The Elements of Computing Systems". This is also a chance to get used to using GitHub.
+
+Heads up, the API for these modules aren't followed exactly because the book assumes we are using an imperative language and global variables.  Everything should still work correctly!
+
+Feel free to give me any feedback on my Haskell implementation!

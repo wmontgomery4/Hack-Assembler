@@ -10,6 +10,7 @@
 
 import Data.Char
 import Data.List
+import qualified Data.Map as M
 import System.Environment
 import System.IO
 
@@ -56,15 +57,24 @@ parse cmd
 
 -- The next functions convert A and C commands into their respective
 -- opcodes.  Right now we're assuming no symbols/constants are used
+-- Also, if a dest, comp, or jump mnemonic is incorrect, it will be
+-- caught as an error during pattern matching.  I'll make this fail
+-- more informatively later
 
 commandToCode :: Command -> String
 commandToCode (ACommand symb)
 	      | null symb = error "Empty symbol encountered"
 	      | isDigit (head symb) = '0' : to15BitFromString symb
-commandToCode (CCommand d c j) = "Holder for now"
+
+commandToCode (CCommand d c j) = let (Just dest) = M.lookup d destMap
+	      		       	     (Just comp) = M.lookup c compMap
+				     (Just jump) = M.lookup j jumpMap
+				 in  "111" ++ comp ++ dest ++ jump
+
+commandToCode _ = error "commandToCode should only be called on A/CCommands"
 
 -- Helper function that converts a positive decimal number into a binary
--- string
+-- bit string
 toKBit :: Int -> String -> Int -> String
 toKBit k acc int
        | k <= 0    = acc
@@ -74,3 +84,56 @@ toKBit k acc int
 
 to15BitFromString :: String -> String
 to15BitFromString strnum = toKBit 15 "" (read strnum)
+
+-- Maps for converting the dest, jump, comp mnemonics into bit strings
+
+destMap :: M.Map String String
+destMap = M.fromList [("",    "000"),
+	  	      ("M",   "001"),
+		      ("D",   "010"),
+		      ("MD",  "011"),
+		      ("A",   "100"),
+		      ("AM",  "101"),
+		      ("AD",  "110"),
+		      ("AMD", "111")]
+
+compMap :: M.Map String String
+compMap = M.fromList [("0",   "0101010"),
+	  	      ("1",   "0111111"),
+		      ("-1",  "0111010"),
+		      ("D",   "0001100"),
+		      ("A",   "0110000"),
+		      ("M",   "1110000"),
+		      ("!D",  "0001101"),
+		      ("!A",  "0110001"),
+		      ("!M",  "1110001"),
+		      ("-D",  "0001111"),
+		      ("-A",  "0110011"),
+		      ("-M",  "1110011"),
+		      ("D+1", "0011111"),
+		      ("A+1", "0110111"),
+		      ("M+1", "1110111"),
+		      ("D-1", "0001110"),
+		      ("A-1", "0110010"),
+		      ("M-1", "1110010"),
+		      ("D+A", "0000010"),
+		      ("D+M", "1000010"),
+		      ("D-A", "0010011"),
+		      ("D-M", "1010011"),
+		      ("A-D", "0000111"),
+		      ("M-D", "1000111"),
+		      ("D&A", "0000000"),
+		      ("D&M", "1000000"),
+		      ("D|A", "0010101"),
+		      ("D|M", "1010101")]
+
+jumpMap :: M.Map String String
+jumpMap = M.fromList [("",    "000"),
+	  	      ("JGT", "001"),
+		      ("JEQ", "010"),
+		      ("JGE", "011"),
+		      ("JLT", "100"),
+		      ("JNE", "101"),
+		      ("JLE", "110"),
+		      ("JMP", "111")]
+	       

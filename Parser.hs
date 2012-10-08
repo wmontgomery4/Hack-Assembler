@@ -21,7 +21,8 @@ main = do
      asmContents <- hGetContents asmHandle
      let processed = process asmContents
      	 parsed = map parse processed
-     mapM_ (putStrLn . show) parsed
+	 coded = map commandToCode parsed
+     mapM_ putStrLn coded
 
 
 -- Converts the file to a list of parsable commands, gets rid of white space too
@@ -30,7 +31,6 @@ process :: String -> [String]
 process contents = let nocomments = map (takeWhile (/='/')) . lines $ contents
 		       stripped = map (filter (not . isSpace)) nocomments
 		   in  filter (not . null) stripped
-
 
 
 -- The parse function takes a stripped string (containing only a command)
@@ -54,3 +54,23 @@ parse cmd
 			      CCommand dest comp jump
 
 
+-- The next functions convert A and C commands into their respective
+-- opcodes.  Right now we're assuming no symbols/constants are used
+
+commandToCode :: Command -> String
+commandToCode (ACommand symb)
+	      | null symb = error "Empty symbol encountered"
+	      | isDigit (head symb) = '0' : to15BitFromString symb
+commandToCode (CCommand d c j) = "Holder for now"
+
+-- Helper function that converts a positive decimal number into a binary
+-- string
+toKBit :: Int -> String -> Int -> String
+toKBit k acc int
+       | k <= 0    = acc
+       | otherwise = let newbit = int `mod` 2
+       	 	     	 rest = int `div` 2
+		     in toKBit (k-1) (show newbit ++ acc) rest
+
+to15BitFromString :: String -> String
+to15BitFromString strnum = toKBit 15 "" (read strnum)

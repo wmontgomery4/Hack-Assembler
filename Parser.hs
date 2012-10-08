@@ -24,18 +24,12 @@ main = do
      mapM_ (putStrLn . show) parsed
 
 
--- Helper function that removes the comments in a line.  We assume that the only use of a
--- forward slash '/' is for comments, because this makes the code much simpler
-removeComments :: String -> String
-removeComments str = let (precomm,postcomm) = break (=='/') str
-	       	     in precomm
-
 -- Converts the file to a list of parsable commands, gets rid of white space too
--- THIS NEEDS TO FIXED TO REMOVE COMMENTS AS WELL
+
 process :: String -> [String]
-process contents = let stripped = map (filter (not . isSpace) ) . lines $ contents
-		       nocomments = map removeComments stripped
-		   in  filter (not . null) nocomments
+process contents = let nocomments = map (takeWhile (/='/')) . lines $ contents
+		       stripped = map (filter (not . isSpace)) nocomments
+		   in  filter (not . null) stripped
 
 
 

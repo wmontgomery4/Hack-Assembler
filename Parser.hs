@@ -15,6 +15,7 @@ import System.IO
 
 data CommandType = ACommand | CCommand | LCommand deriving (Show)
 type Command = String	
+type CmdTuple = (Command, CommandType)
 
 main = do
      [asmFile] <- getArgs
@@ -25,6 +26,7 @@ main = do
      mapM_ (putStrLn . show) tupleList
 
 -- Converts the file to a list of parsable commands, gets rid of white space too
+-- THIS NEEDS TO FIXED TO REMOVE COMMENTS AS WELL
 process :: String -> [Command]
 process = filter isCommand . map (filter isNotSpace) . lines
 	where isNotSpace = not . isSpace
@@ -38,4 +40,23 @@ commandType cmd
 	    | head cmd == '@' = ACommand
 	    | otherwise       = CCommand 
 
--- Starting the parsing commands
+-- Gets the symbol from an LCommand or ACommand
+symbol :: CmdTuple -> String
+symbol (cmd, LCommand) = tail . init $ cmd
+symbol (cmd, ACommand) = tail cmd
+symbol (cmd, _) = error "symbol should only be called on L/A Commands"
+
+-- Returns the dest, comp and jump components of a CCommand
+dcj :: CmdTuple -> (String, String, String)
+dcj (cmd, CCommand) = let (presemi, postsemi) = break (== ';') cmd
+    	  	      	  jump = if null postsemi 
+			       	    then "" 
+				    else tail postsemi
+			  (preeq, posteq) = break (== '=') presemi
+			  (dest,comp) = if null posteq
+			  	      	   then ("",preeq)
+					   else (preeq,tail posteq)
+                      in
+			(dest,comp,jump)
+
+dcj (cmd, _) = error "DCJ should only be called on CCommands"

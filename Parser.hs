@@ -13,50 +13,43 @@ import Data.List
 import System.Environment
 import System.IO
 
-data CommandType = ACommand | CCommand | LCommand deriving (Show)
-type Command = String	
-type CmdTuple = (Command, CommandType)
+data Command = ACommand String | LCommand String | CCommand String String String deriving (Show)
 
 main = do
      [asmFile] <- getArgs
      asmHandle <- openFile asmFile ReadMode
      asmContents <- hGetContents asmHandle
      let processed = process asmContents
-     	 tupleList = map (\cmd -> (cmd,commandType cmd)) processed
-     mapM_ (putStrLn . show) tupleList
+     	 parsed = map parse processed
+     mapM_ (putStrLn . show) parsed
+
 
 -- Converts the file to a list of parsable commands, gets rid of white space too
 -- THIS NEEDS TO FIXED TO REMOVE COMMENTS AS WELL
-process :: String -> [Command]
+process :: String -> [String]
 process = filter isCommand . map (filter isNotSpace) . lines
 	where isNotSpace = not . isSpace
 	      isCommand str = (str /= "") && not (isPrefixOf "//" str)
 
 
--- Returns the command type of a command, assumes well-formed expressions right now
-commandType :: Command -> CommandType
-commandType cmd 
-	    | head cmd == '(' = LCommand
-	    | head cmd == '@' = ACommand
-	    | otherwise       = CCommand 
+-- The parse function takes a stripped string (containing only a command)
+-- and converts it into one of the Command types, along with its 
+-- associated symbol or dest/comp/jump mnemonics
 
--- Gets the symbol from an LCommand or ACommand
-symbol :: CmdTuple -> String
-symbol (cmd, LCommand) = tail . init $ cmd
-symbol (cmd, ACommand) = tail cmd
-symbol (cmd, _) = error "symbol should only be called on L/A Commands"
+parse :: String -> Command
+parse cmd
+      | null cmd = error "Parse should not be called on empty strings"
+      | head cmd == '(' = LCommand (tail . init $ cmd)
+      | head cmd == '@' = ACommand (tail cmd)
+      | otherwise       = let (presemi,postsemi) = break (==';') cmd
+      			      jump = if null postsemi
+			      	     	then ""
+					else (tail postsemi)
+			      (preeq,posteq) = break (=='=') presemi
+			      (dest,comp) = if null posteq
+			      		       then ("", preeq)
+					       else (preeq, tail posteq)
+			  in
+			      CCommand dest comp jump
 
--- Returns the dest, comp and jump components of a CCommand
-dcj :: CmdTuple -> (String, String, String)
-dcj (cmd, CCommand) = let (presemi, postsemi) = break (== ';') cmd
-    	  	      	  jump = if null postsemi 
-			       	    then "" 
-				    else tail postsemi
-			  (preeq, posteq) = break (== '=') presemi
-			  (dest,comp) = if null posteq
-			  	      	   then ("",preeq)
-					   else (preeq,tail posteq)
-                      in
-			(dest,comp,jump)
 
-dcj (cmd, _) = error "DCJ should only be called on CCommands"

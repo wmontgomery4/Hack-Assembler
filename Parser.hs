@@ -18,16 +18,11 @@ data Command = ACommand String | LCommand String | CCommand String String String
 
 main = do
      [asmFile] <- getArgs
-     asmHandle <- openFile asmFile ReadMode
-     asmContents <- hGetContents asmHandle
-     let processed = process asmContents
-     	 parsed = map parse processed
-	 symbols = getSymbols parsed
-	 coded = map (commandToCode symbols) parsed
-     mapM_ (putStrLn . show) parsed
-     putStrLn (show symbols)
-     mapM_ putStrLn coded
-
+     let (fileName,period:filetype) = break (=='.') asmFile
+     asmContents <- readFile asmFile
+     let machineCode = commandsToCode . map parse . process $ asmContents
+     	 hackFileName = fileName ++ ".hack"
+     writeFile hackFileName machineCode
 
 -- Converts the file to a list of parsable commands, gets rid of white space too
 
@@ -58,25 +53,27 @@ parse cmd
 			      CCommand dest comp jump
 
 
--- The next functions convert A and C commands into their respective
--- opcodes.  Right now we're assuming no symbols/constants are used
--- Also, if a dest, comp, or jump mnemonic is incorrect, it will be
--- caught as an error during pattern matching.  I'll make this fail
--- more informatively later
+-- This folding function adds a line of code to an accumulating string
 
-commandToCode :: SymbolTable -> Command -> String
-commandToCode table (ACommand symb)
-	      | null symb = error "Empty symbol encountered"
-	      | isDigit (head symb) = '0' : to15BitFromString symb
-	      | M.member symb table = let (Just address) = M.lookup symb table
-	      		      	      in '0' : toKBit 15 "" address
+commandsToCodeFF :: SymbolTable -> Command -> String -> String
+commandsToCodeFF table (ACommand symb) acc
+	      	 | null symb = error "Empty symbol encountered"
+	      	 | isDigit (head symb) = ('0' : to15BitFromString symb) ++ ('\n' : acc)
+	      	 | M.member symb table = let (Just address) = M.lookup symb table
+	      		         	 in ('0' : toKBit 15 "" address) ++ ('\n' : acc)
 
-commandToCode table (CCommand d c j) = let (Just dest) = M.lookup d destMap
-	      		         	   (Just comp) = M.lookup c compMap
-					   (Just jump) = M.lookup j jumpMap
-				       in  "111" ++ comp ++ dest ++ jump
+commandsToCodeFF table (CCommand d c j) acc = let (Just dest) = M.lookup d destMap
+	      		         	      	  (Just comp) = M.lookup c compMap
+					   	  (Just jump) = M.lookup j jumpMap
+				       	      in  ("111" ++ comp ++ dest ++ jump) ++ ('\n' : acc)
 
-commandToCode _ _ = error "commandToCode should only be called on A/CCommands"
+commandsToCodeFF table (LCommand l) acc = acc
+
+-- This function turns a list of commands into what we want
+commandsToCode :: [Command] -> String
+commandsToCode commands =
+	        let symbols = getSymbols commands
+		in foldr (commandsToCodeFF symbols) "" commands
 
 -- Helper function that converts a positive decimal number into a binary
 -- bit string

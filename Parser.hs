@@ -22,7 +22,10 @@ main = do
      asmContents <- hGetContents asmHandle
      let processed = process asmContents
      	 parsed = map parse processed
-	 coded = map commandToCode parsed
+	 symbols = getSymbols parsed
+	 coded = map (commandToCode symbols) parsed
+     mapM_ (putStrLn . show) parsed
+     putStrLn (show symbols)
      mapM_ putStrLn coded
 
 
@@ -61,17 +64,19 @@ parse cmd
 -- caught as an error during pattern matching.  I'll make this fail
 -- more informatively later
 
-commandToCode :: Command -> String
-commandToCode (ACommand symb)
+commandToCode :: SymbolTable -> Command -> String
+commandToCode table (ACommand symb)
 	      | null symb = error "Empty symbol encountered"
 	      | isDigit (head symb) = '0' : to15BitFromString symb
+	      | M.member symb table = let (Just address) = M.lookup symb table
+	      		      	      in '0' : toKBit 15 "" address
 
-commandToCode (CCommand d c j) = let (Just dest) = M.lookup d destMap
-	      		       	     (Just comp) = M.lookup c compMap
-				     (Just jump) = M.lookup j jumpMap
-				 in  "111" ++ comp ++ dest ++ jump
+commandToCode table (CCommand d c j) = let (Just dest) = M.lookup d destMap
+	      		         	   (Just comp) = M.lookup c compMap
+					   (Just jump) = M.lookup j jumpMap
+				       in  "111" ++ comp ++ dest ++ jump
 
-commandToCode _ = error "commandToCode should only be called on A/CCommands"
+commandToCode _ _ = error "commandToCode should only be called on A/CCommands"
 
 -- Helper function that converts a positive decimal number into a binary
 -- bit string
@@ -136,4 +141,42 @@ jumpMap = M.fromList [("",    "000"),
 		      ("JNE", "101"),
 		      ("JLE", "110"),
 		      ("JMP", "111")]
-	       
+
+-- Here we deal with the symbol table stuff
+
+type SymbolTable = M.Map String Int
+
+-- This helper function adds a variable to a symbol table
+-- starting at address 16 as specified in TECS	       
+
+addVarToTable :: (String,Int) -> SymbolTable -> SymbolTable
+addVarToTable (var,address) table = M.insert var address table
+
+-- Adds a list of commands to a symbol table and returns the variables
+symbolHelper :: [Command] -> Int -> SymbolTable -> [String] -> (SymbolTable,[String])
+symbolHelper [] lineNum table vars = (table,vars)
+symbolHelper (LCommand l:rest) lineNum table vars = 
+	     symbolHelper rest lineNum (M.insert l lineNum table) (delete l vars)
+
+symbolHelper (ACommand a:rest) lineNum table vars
+	     | (isDigit . head $ a) || M.member a table || elem a vars =
+	        symbolHelper rest (lineNum + 1) table vars
+	     | otherwise = symbolHelper rest (lineNum + 1) table (a:vars)
+
+symbolHelper (CCommand d c j:rest) lineNum table vars =
+	     symbolHelper rest (lineNum + 1) table vars
+
+-- The preset symbols, not done yet
+presetSymbols :: SymbolTable
+presetSymbols = M.empty 
+
+-- Turns a command list into a symbol table, including the presets
+getSymbols :: [Command] -> SymbolTable
+getSymbols commands = 
+	let (table,vars) = symbolHelper commands 0 presetSymbols []
+	    indexedVars = zip (reverse vars) [16..]
+	in foldr addVarToTable table indexedVars
+
+
+
+
